@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Students{% endblock %}
+{% block content %}
+<h1>Students</h1>
+<div class="bar">
+  <form method="get" class="inline"><input name="q" value="{{ q }}" placeholder="Search name, roll no or class" aria-label="Search students"><button class="btn">Search</button></form>
+  <a class="btn primary" href="{{ url_for('register_student') }}">Register student</a>
+  <span class="grow"></span>
+  <label class="check"><input type="checkbox" id="eq" {{ 'checked' if cfg.USE_EQUALIZATION }}> Histogram equalisation</label>
+  <button class="btn primary" id="train-btn" type="button">Train model</button>
+</div>
+<div id="train-result" class="panel hidden" role="status"></div>
+{% if students %}
+<table><thead><tr><th>Roll no</th><th>Name</th><th>Class</th><th>Images</th><th>Status</th><th></th></tr></thead><tbody>
+{% for s in students %}
+<tr><td>{{ s.roll_no }}</td><td><a href="{{ url_for('student_detail', sid=s.id) }}">{{ s.full_name }}</a></td><td>{{ s.department or '–' }}</td>
+<td>{{ s.image_count }} / {{ cfg.TARGET_TRAIN_IMAGES }}</td>
+<td><span class="chip {{ 'ok' if s.status=='Trained' else 'warn' }}">{{ s.status }}</span></td>
+<td><a class="btn small" href="{{ url_for('student_detail', sid=s.id) }}">Capture / view</a></td></tr>
+{% endfor %}</tbody></table>
+<p class="muted">{{ students|length }} student(s). Aim for {{ cfg.TARGET_TRAIN_IMAGES }}+ varied images each (minimum {{ cfg.MIN_TRAIN_IMAGES }}). Retrain after adding or deleting images.</p>
+{% else %}
+<p class="empty">{% if q %}No student matches “{{ q }}”.{% else %}No students yet. <a href="{{ url_for('register_student') }}">Register the first student</a>.{% endif %}</p>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script>initTrain();</script>{% endblock %}

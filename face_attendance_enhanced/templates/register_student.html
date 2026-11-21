@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Register student{% endblock %}
+{% block content %}
+<h1>Register student</h1>
+<form method="post" class="panel form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label>Full name<input name="full_name" required maxlength="100" value="{{ form.get('full_name','') }}"></label>
+  <label>Roll number (must be unique)<input name="roll_no" required maxlength="30" value="{{ form.get('roll_no','') }}"></label>
+  <label>Class / department (optional)<input name="department" maxlength="60" value="{{ form.get('department','') }}"></label>
+  <p class="muted">Next step: capture face images with the webcam. Confirm the student has been told and agrees to this.</p>
+  <button class="btn primary">Register and capture images</button>
+</form>
+{% endblock %}

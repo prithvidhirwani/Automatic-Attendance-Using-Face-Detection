@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1>Dashboard <span class="muted">{{ stats.date }}</span></h1>
+<section class="stats">
+  <div><b>{{ stats.total }}</b>Registered students</div>
+  <div><b>{{ stats.present }}</b>Present today</div>
+  <div><b>{{ stats.absent }}</b>Absent today</div>
+  <div><b>{% if stats.percentage is none %}–{% else %}{{ stats.percentage }}%{% endif %}</b>Today's attendance</div>
+</section>
+<section class="panel">
+  <h2>Recognition model</h2>
+  {% if meta %}
+    <p>Trained {{ meta.trained_at }} on {{ meta.num_images }} images of {{ meta.num_identities }} identities.
+    Histogram equalisation: {{ 'on' if meta.equalize else 'off' }}. Unknown threshold: LBPH distance ≤ {{ threshold }}.</p>
+  {% else %}
+    <p class="warn">{{ model_error or 'No model yet.' }} <a href="{{ url_for('students') }}">Go to Students</a> to train.</p>
+  {% endif %}
+</section>
+<section class="panel">
+  <h2>Recent attendance</h2>
+  {% if recent %}
+  <table><thead><tr><th>Time</th><th>Roll no</th><th>Name</th><th>Status</th></tr></thead><tbody>
+    {% for r in recent %}<tr><td>{{ r.marked_at.replace('T',' ') }}</td><td>{{ r.roll_no }}</td><td>{{ r.full_name }}</td><td><span class="chip ok">{{ r.status }}</span></td></tr>{% endfor %}
+  </tbody></table>
+  {% else %}<p class="muted">No attendance has been recorded yet. Start <a href="{{ url_for('live_attendance') }}">live attendance</a> once a model is trained.</p>{% endif %}
+</section>
+{% endblock %}

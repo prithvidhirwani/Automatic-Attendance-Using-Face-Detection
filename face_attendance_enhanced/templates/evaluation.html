@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Model evaluation{% endblock %}
+{% macro v(x, suffix='') %}{% if x is none or x == '' %}<span class="na" title="Not measurable with the current data">n/a</span>{% else %}{{ x }}{{ suffix }}{% endif %}{% endmacro %}
+{% block content %}
+<h1>Model evaluation</h1>
+<p class="muted">Only real measurements appear here. Nothing is shown until you add labelled test images and run an evaluation. Test images are stored in <code>test_dataset/</code>, separate from training images.</p>
+
+<section class="panel">
+  <h2>1. Add a labelled test image</h2>
+  <form method="post" action="{{ url_for('upload_test_image') }}" enctype="multipart/form-data" class="form grid" id="test-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Type<select name="type"><option value="individual">Individual (one person)</option><option value="group">Group (several people)</option></select></label>
+    <label>Image (JPG/PNG)<input type="file" name="image" accept="image/jpeg,image/png" id="test-file"></label>
+    <label>People in the image (roll numbers separated by ;  — use UNKNOWN for anyone not registered)<input name="people" required placeholder="21IT001;21IT007;UNKNOWN"></label>
+    <label>Face boxes (optional, same order: x,y,w,h;x,y,w,h)<input name="boxes" placeholder="40,60,120,120;210,55,118,118"></label>
+    <label>Notes (optional)<input name="notes" maxlength="200"></label>
+    <div><button class="btn primary">Save image + ground truth</button></div>
+  </form>
+  <details><summary>Or capture the test image with the webcam</summary>
+    <div class="cam"><video id="video" autoplay playsinline muted></video><canvas id="work" class="hidden"></canvas></div>
+    <div class="bar"><button class="btn" id="cam-on" type="button">Start camera</button><button class="btn" id="snap-test" type="button" disabled>Use current frame</button></div>
+    <p class="muted" id="cap-msg">The captured frame fills the image field above; then fill in the people and save. Use a different session from training capture.</p>
+  </details>
+  <p class="muted">Ground truth rows: {{ gt_count }} ({{ gt_ind }} individual, {{ gt_grp }} group). Registered identities: {{ students|length }}.</p>
+</section>
+
+<section class="panel">
+  <h2>2. Run evaluation</h2>
+  {% if not model_ready %}<p class="warn">{{ model_error }}</p>{% endif %}
+  <div class="bar">
+    <label>LBPH threshold <input type="number" step="0.5" min="1" id="thr" value="{{ threshold }}" style="width:6em"></label>
+    <button class="btn primary" data-eval="individual">Run individual</button>
+    <button class="btn primary" data-eval="group">Run group</button>
+    <button class="btn" data-eval="both">Run both</button>
+    <span id="eval-msg" class="muted" role="status"></span>
+  </div>
+  <p class="muted">Do not keep adjusting the threshold on these same test images and then report the best result — pick it on a separate validation set, then evaluate once.</p>
+  <div class="bar">
+    <a class="btn" href="{{ url_for('eval_export', name='individual_results') }}">individual_results.csv</a>
+    <a class="btn" href="{{ url_for('eval_export', name='group_results') }}">group_results.csv</a>
+    <a class="btn" href="{{ url_for('eval_export', name='summary_metrics') }}">summary_metrics.csv</a>
+  </div>
+</section>
+
+{% if not has_summary %}
+<p class="empty">The evaluation has not been performed yet. Add labelled test images, then run it.</p>
+{% else %}
+{% set cov = s.get('coverage', {}) %}
+{% if cov.get('test_complete') != 'True' %}
+<div class="flash error">Test incomplete: {{ cov.get('identities_tested_individually', 0) }} of {{ cfg.TARGET_IDENTITIES }} target identities have an individual test image ({{ cov.get('registered_identities', 0) }} registered).</div>
+{% endif %}
+{% for k in ('individual','group') %}{% if info[k] and info[k].warnings %}
+<details class="panel"><summary>{{ info[k].images_skipped }} {{ k }} image(s) skipped</summary><ul>{% for w in info[k].warnings %}<li>{{ w }}</li>{% endfor %}</ul></details>{% endif %}{% endfor %}
+
+<section class="panel">
+  <h2>Summary</h2>
+  <div class="scroll"><table>
+  <thead><tr><th>Measure</th><th>Individual</th><th>Group</th><th>Overall</th></tr></thead><tbody>
+  {% set rows = [('Images evaluated','images',''),('Actual faces','actual_faces',''),('Faces detected','faces_detected',''),
+     ('Correct identities','correct_identities',''),('Wrong identity','wrong_identities',''),('Registered face labelled Unknown','false_unknown',''),
+     ('Unknown people correctly rejected','correct_rejections',''),('Unknown people wrongly accepted','false_accepts',''),
+     ('Identity accuracy (correct ÷ registered faces)','identity_accuracy','%'),('Unknown rejection rate','unknown_rejection_rate','%'),
+     ('Images with box annotations','box_verified_images',''),('Detection precision (box-verified)','detection_precision','%'),('Detection recall (box-verified)','detection_recall','%'),
+     ('Macro precision','macro_precision',''),('Macro recall','macro_recall',''),('Macro F1','macro_f1',''),
+     ('Weighted precision','weighted_precision',''),('Weighted recall','weighted_recall',''),('Weighted F1','weighted_f1','')] %}
+  {% for label, key, suf in rows %}<tr><td>{{ label }}</td>{% for sc in ('individual','group','overall') %}<td>{{ v(s.get(sc,{}).get(key), suf) }}</td>{% endfor %}</tr>{% endfor %}
+  </tbody></table></div>
+  <p class="muted">Aggregates use summed counts, not an average of per-image percentages.</p>
+</section>
+
+{% if per_identity %}
+<details class="panel"><summary>Per-identity precision / recall / F1 (all images)</summary>
+<table><thead><tr><th>Identity</th><th>Precision</th><th>Recall</th><th>F1</th><th>Faces</th></tr></thead><tbody>
+{% for lab, m in per_identity.items() %}<tr><td>{{ lab }}</td><td>{{ m.precision }}</td><td>{{ m.recall }}</td><td>{{ m.f1 }}</td><td>{{ m.support }}</td></tr>{% endfor %}
+</tbody></table></details>
+{% endif %}
+
+{% for title, rows in (('Individual images', ind), ('Group images', grp)) %}
+<section class="panel"><h2>{{ title }} — per image</h2>
+{% if rows %}<div class="scroll"><table class="dense"><thead><tr><th>Image</th><th>Actual identity</th><th>Predicted</th><th>Correct?</th><th>Actual faces</th><th>Detected</th><th>Correctly detected</th><th>Missed</th><th>False det.</th><th>Correct IDs</th><th>Wrong IDs</th><th>Unknown rejections</th><th>Accuracy %</th><th>Mode</th></tr></thead><tbody>
+{% for r in rows %}<tr><td>{{ r.image }}</td><td>{{ r.actual_identity }}</td><td>{{ r.predicted_identity }}</td><td>{{ 'Yes' if r.is_correct == 'True' else 'No' }}</td><td>{{ r.actual_faces }}</td><td>{{ r.faces_detected }}</td><td>{{ v(r.tp_faces) }}</td><td>{{ r.missed_faces }}</td><td>{{ r.false_detections }}</td><td>{{ r.correct_identities }}</td><td>{{ r.wrong_identities|int + r.false_unknown|int }}</td><td>{{ r.correct_rejections }}</td><td>{{ v(r.identity_accuracy) }}</td><td>{{ r.mode }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="muted">No {{ title|lower }} evaluated yet.</p>{% endif %}</section>
+{% endfor %}
+{% endif %}
+
+<section class="panel">
+  <h2>How to read these numbers</h2>
+  <ul class="notes">
+    <li><b>Detection</b> = finding a face box. <b>Recognition</b> = naming it. <b>Unknown rejection</b> = refusing to name someone who is not registered. They are reported separately.</li>
+    <li><b>Identity accuracy</b> = correctly identified registered faces ÷ registered faces actually in the image(s). Example: 4 of 6 gives 66.67%. Faces the detector missed count as not identified.</li>
+    <li><b>Detection precision/recall</b> need face-box annotations: a detection is correct when it overlaps an annotated box with IoU ≥ {{ cfg.IOU_THRESHOLD }}. Without boxes they show n/a; the per-image “missed / false det.” are then only count differences.</li>
+    <li><b>Modes</b>: <i>box</i> judges each face by position. <i>single</i> uses the largest detected face. <i>set</i> (group, no boxes) can only check whether the right names appear, not where — treat it as an approximation.</li>
+    <li><b>Precision / recall / F1</b> are computed per identity from (actual, predicted) pairs, then macro-averaged (each identity counts equally) and weighted-averaged (by number of faces). A missed face lowers recall for that identity.</li>
+    <li>LBPH distance is not a probability. Results apply to your data, lighting and threshold only.</li>
+  </ul>
+</section>
+{% endblock %}
+{% block scripts %}<script>initEvaluation();</script>{% endblock %}

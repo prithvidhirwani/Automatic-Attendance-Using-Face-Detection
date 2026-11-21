@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Live attendance{% endblock %}
+{% block content %}
+<h1>Live attendance</h1>
+{% if not model_ready %}<div class="flash error">{{ model_error }} <a href="{{ url_for('students') }}">Train the model</a> first.</div>{% endif %}
+<p class="muted">A student is marked present only after being recognised in {{ cfg.CONFIRM_FRAMES }} consecutive frames with LBPH distance ≤ {{ threshold }}. Detecting a face alone never marks attendance. One record per student per day.</p>
+<div class="bar">
+  <button class="btn primary" id="start" type="button">Start recognition</button>
+  <button class="btn" id="stop" type="button" disabled>Stop</button>
+  <span id="state" class="chip">Stopped</span>
+</div>
+<div class="live">
+  <div class="cam stage"><video id="video" autoplay playsinline muted></video><canvas id="overlay"></canvas></div>
+  <div class="panel log"><h2>This session</h2><ul id="log"><li class="muted">Nothing marked yet.</li></ul></div>
+</div>
+<canvas id="work" class="hidden"></canvas>
+<p id="live-msg" class="muted" role="status"></p>
+{% endblock %}
+{% block scripts %}<script>initLive();</script>{% endblock %}

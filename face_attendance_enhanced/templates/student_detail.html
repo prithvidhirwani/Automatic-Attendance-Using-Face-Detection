@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ s.full_name }}{% endblock %}
+{% block content %}
+<h1>{{ s.full_name }} <span class="muted">{{ s.roll_no }}</span></h1>
+<p>Class: {{ s.department or '–' }} · Status: <span class="chip {{ 'ok' if s.status=='Trained' else 'warn' }}">{{ s.status }}</span> ·
+Images: <b id="count">{{ s.image_count }}</b> / {{ cfg.TARGET_TRAIN_IMAGES }}</p>
+<section class="panel">
+  <h2>Capture training images</h2>
+  <p class="muted">One face only, facing the camera. Between shots, vary head angle, expression and distance a little. Blurry, dark or small faces are rejected.</p>
+  <div class="cam">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="work" class="hidden"></canvas>
+  </div>
+  <div class="bar">
+    <button class="btn" id="cam-on" type="button">Start camera</button>
+    <button class="btn primary" id="snap" type="button" disabled>Capture one</button>
+    <button class="btn" id="burst" type="button" disabled>Auto-capture 10</button>
+    <button class="btn" id="cam-off" type="button" disabled>Stop camera</button>
+  </div>
+  <p id="cap-msg" class="muted" role="status"></p>
+</section>
+<section class="panel">
+  <h2>Stored images</h2>
+  <div class="thumbs" id="thumbs">
+  {% for f in files %}
+    <form method="post" action="{{ url_for('delete_image', sid=s.id, name=f) }}" onsubmit="return confirm('Delete this image?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <img src="{{ url_for('student_image', sid=s.id, name=f) }}" alt="Training image" width="100" height="100"><button class="x" title="Delete image">×</button>
+    </form>
+  {% else %}<p class="muted" id="no-thumbs">No images yet.</p>{% endfor %}
+  </div>
+</section>
+<section class="panel danger">
+  <h2>Delete student</h2>
+  <p>Removes the student, their attendance records and all stored face images. Retrain the model afterwards.</p>
+  <form method="post" action="{{ url_for('delete_student', sid=s.id) }}" onsubmit="return confirm('Permanently delete {{ s.full_name|e }} and all their images and attendance records?')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn danger">Delete student</button>
+  </form>
+</section>
+{% endblock %}
+{% block scripts %}<script>initCapture({{ s.id }});</script>{% endblock %}
